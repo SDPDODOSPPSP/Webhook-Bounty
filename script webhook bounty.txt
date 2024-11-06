@@ -1,0 +1,94 @@
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local leaderstats = LocalPlayer:WaitForChild("leaderstats")
+local bountyStat = leaderstats:WaitForChild("Bounty/Honor")
+
+-- Hàm gửi dữ liệu đến webhook
+local function sendToWebhook(bountyValue)
+    local data = {
+        ["embeds"] = {
+            {
+                ["color"] = tonumber(0x00ff00),  -- Màu xanh lá cây sáng
+                ["title"] = "**BOUNTY NOTIFICATION TOTAL**",  -- Tiêu đề
+                ["fields"] = {
+                    {
+                        ["name"] = "Username:",  -- Tên người chơi
+                        ["value"] = "```" .. LocalPlayer.Name .. "```",  -- Hiển thị tên người chơi
+                        ["inline"] = true,  -- Hiển thị inline
+                    },
+                    {
+                        ["name"] = "Current Bounty:",  -- Giá trị bounty hiện tại
+                        ["value"] = "```yaml\n" .. tostring(bountyValue) .. "\n```",  -- Giá trị bounty
+                        ["inline"] = true,  -- Hiển thị inline
+                    }
+                }
+            }
+        }
+    }
+    
+    local newdata = HttpService:JSONEncode(data)
+    
+    local headers = {
+        ["content-type"] = "application/json"
+    }
+    
+    -- Chọn phương thức request phù hợp
+    local request = http_request or request or HttpPost 
+    local R = {Url = webhookUrl, Body = newdata, Method = "POST", Headers = headers}
+
+    -- Gửi yêu cầu
+    local success, response = pcall(function()
+        return request(R)
+    end)
+
+    if not success then
+        print("Lỗi khi gửi webhook: " .. tostring(response))
+    else
+        print("Đã gửi thành công đến webhook: " .. response) 
+    end
+end
+
+-- Tạo thư mục Webhook nếu chưa tồn tại
+if not isfolder("Webhook") then
+    makefolder("Webhook")
+end
+
+-- Tạo tệp savebounty với tên tài khoản Roblox
+local saveBountyPath = "Webhook/" .. LocalPlayer.Name .. "_savebounty.txt"
+if not isfile(saveBountyPath) then
+    local initialBounty = bountyStat.Value
+    writefile(saveBountyPath, tostring(initialBounty))
+end
+
+-- Hàm cập nhật tệp savebounty
+local function updateSaveBounty(newBounty)
+    writefile(saveBountyPath, tostring(newBounty))
+end
+
+-- Ghi lại giá trị ban đầu
+local oldBounty = bountyStat.Value
+
+-- Kết nối với sự kiện thay đổi giá trị Bounty/Honor
+bountyStat.Changed:Connect(function(newBounty)
+    -- Gửi thông tin qua webhook nếu có sự thay đổi
+    if newBounty ~= oldBounty then
+        sendToWebhook(newBounty)
+        updateSaveBounty(newBounty)
+        oldBounty = newBounty  -- Cập nhật giá trị cũ
+        
+        -- Kiểm tra nếu bounty đạt 29 triệu thì kick người chơi
+        if newBounty >= 30000000 then
+            LocalPlayer:Kick("FINISH 29M BOUNTY, EASY!")
+        end
+    end
+end)
+
+-- Hàm kiểm tra liên tục mỗi 1 giây
+while true do
+    wait(1)  -- Đợi 1 giây
+    if bountyStat.Value > 30000000 then
+        LocalPlayer:Kick("FINISH 29M BOUNTY, EASY!")
+        break
+    end
+end
